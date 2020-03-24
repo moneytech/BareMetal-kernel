@@ -1,78 +1,72 @@
 # BareMetal x86-64 API
 
-Version 1 - November 14, 2016
+Version 1 - December 12, 2018
+
 
 ### Notes
 
 This document details the API calls built into the BareMetal exokernel.
 
+
 ### Contents
 
-1. Output
-	- b\_output
-	- b\_output\_chars
-2. Input
+1. Input/Output
 	- b\_input
-	- b\_input\_key
-3. SMP
-	- b\_smp\_set
-	- b\_smp\_config
-4. Memory
-	- b\_mem\_allocate
-	- b\_mem\_release
-5. Network
+	- b\_output
+2. Network
 	- b\_net\_tx
 	- b\_net\_rx
-6. Disk
+3. Disk
 	- b\_disk\_read
 	- b\_disk\_write
-7. Misc
-	- b\_system\_config
-	- b\_system\_misc
+4. Misc
+	- b\_config
+	- b\_system
 
 
-## Output
+## Input/Output
+
+
+### b\_input
+
+Scans for input from keyboard or serial.
+
+Assembly Registers:
+
+	 IN:	Nothing
+	OUT:	AL = 0 if no key pressed, otherwise ASCII code, other regs preserved
+		All other registers preserved
+
+Assembly Example:
+
+	call [b_input]
+	mov byte [KeyChar], al
+	...
+	KeyChar: db 0
+
+C Example:
+
+	char KeyChar;
+	KeyChar = b_input();
+	if (KeyChar == 'a')
+	...
 
 
 ### b\_output
 
-Output text to the screen or via serial. The string must be null-terminated - also known as ASCIIZ.
-
-Assembly Registers:
-
-	 IN:	RSI = message location (zero-terminated string)
-	OUT:	All registers preserved
-
-Assembly Example:
-
-	mov rsi, Message
-	call b_output
-	...
-	Message: db 'This is a test', 0
-
-C Example:
-
-	char Message[] = "This is a test";
-	b_output(Message);
-
-	b_output("This is a another test");
-
-
-### b\_output\_chars
-
-Output a number of characters to the screen or via serial.
+Output a number of characters via the standard output method.
 
 Assembly Registers:
 
 	 IN:	RSI = message location
-			RCX = number of characters to output
+		RCX = number of characters to output
 	OUT:	All registers preserved
 
 Assembly Example:
 
 	mov rsi, Message
 	mov rcx, 4
-	call os_output_chars					; Only output the word 'This'
+	call [b_output]					; Only output the word 'This'
 	...
 	Message: db 'This is a test', 0
 
@@ -82,135 +76,6 @@ C Example:
 
 	char Message[] = "Hello, world!";
 	b_output_chars(Message, 5);				// Output 'Hello'
-
-
-## Input
-
-
-### b\_input
-
-Accept a number of keys from the keyboard or via serial. The resulting string will automatically be null-terminated.
-
-Assembly Registers:
-
-	 IN:	RDI = location where string will be stored
-			RCX = number of characters to accept
-	OUT:	RCX = length of string that were input (NULL not counted)
-			All other registers preserved
-
-Assembly Example:
-
-	mov rdi, Input
-	mov rcx, 20
-	call b_input
-	...
-	Input: db 0 times 21
-
-C Example:
-
-	char Input[21];
-	b_input(Input, 20);
-
-
-### b\_input\_key
-
-Scans for input from keyboard or serial.
-
-Assembly Registers:
-
-	 IN:	Nothing
-	OUT:	AL = 0 if no key pressed, otherwise ASCII code, other regs preserved
-			All other registers preserved
-
-Assembly Example:
-
-	call b_input_key
-	mov byte [KeyChar], al
-	...
-	KeyChar: db 0
-
-C Example:
-
-	char KeyChar;
-	KeyChar = b_input_key();
-	if (KeyChar == 'a')
-	...
-
-
-## SMP
-
-BareMetal uses a queue for tasks. Tasks are automatically pulled out of the queue by available CPU cores.
-
-### b\_smp\_set
-
-Add a workload to the processing queue.
-
-Assembly Registers:
-
-	 IN:	RAX = Code address
-			RDX = Data address
-			RCX = CPU APIC ID
-	OUT:	RAX = 0 on error
-
-Assembly Example:
-
-		mov rax, ap_code	; Our code to run on an available core
-		xor rdx, rdx		; Clear RDX as there is no argument
-		mov rcx, 1		; Set CPU with ID 1 to run code
-		call [b_smp_set]
-		ret
-
-	ap_code:
-		...
-		ret
-
-C Example:
-
-
-
-### b\_smp\_config
-
-Just a stub fuction at the moment
-
-
-## Memory
-
-Memory is allocated in 2MiB pages.
-
-### b\_mem\_allocate
-
-Allocate pages of memory
-
-Assembly Registers:
-
-	 IN:	RCX = Number of pages to allocate
-	OUT:	RAX = Starting address (Set to 0 on failure)
-			All other registers preserved
-
-Assembly Example:
-
-	mov rcx, 2		; Allocate 2 2MiB pages (4MiB in total)
-	call b_mem_allocate
-	jz mem_fail
-	mov rsi, rax	; Copy memory address to RSI
-
-
-### b\_mem\_release
-
-Release pages of memory
-
-Assembly Registers:
-
-	 IN:	RAX = Starting address
-			RCX = Number of pages to free
-	OUT:	RCX = Number of pages freed
-			All other registers preserved
-
-Assembly Example:
-
-	mov rax, rsi	; Copy memory address to RAX
-	mov rcx, 2		; Free 2 2MiB pages (4MiB in total)
-	call b_mem_release
 
 
 ## Network
@@ -223,8 +88,8 @@ Transmit data via Ethernet
 Assembly Registers:
 
 	 IN:	RSI = memory location of packet
-			RCX = length of packet
-			RDX = Interface ID
+		RCX = length of packet
+		RDX = Interface ID
 	OUT:	All registers preserved
 
 Assembly Example:
@@ -232,7 +97,7 @@ Assembly Example:
 	mov rsi, Packet
 	mov rcx, 1500
 	mod rdx, 0
-	call b_net_tx
+	call [b_net_tx]
 	...
 	Packet:
 	Packet_Dest: db 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF ; Broadcast
@@ -250,14 +115,14 @@ Receive data via Ethernet
 Assembly Registers:
 
 	 IN:	RDI = memory location to store packet
-			RDX = Interface ID
+		RDX = Interface ID
 	OUT:	RCX = length of packet, 0 if nothing to receive
 
 Assembly Example:
 
 	mov rdi, Packet
 	mov rdx, 0
-	call b_net_rx
+	call [b_net_rx]
 	...
 	Packet: times 1518 db 0
 
@@ -268,6 +133,7 @@ Note: BareMetal does not keep a buffer of received packets. This means that the 
 
 BareMetal uses 4096 byte sectors for all disk access. Disk sectors start at 0. Individual calls to disk read and write functions support up to 512 sectors being read/written (2MiB).
 
+
 ### b\_disk\_read
 
 Read a number of sectors from disk to memory
@@ -275,19 +141,19 @@ Read a number of sectors from disk to memory
 Assembly Registers:
 
 	 IN:	RAX = Starting sector #
-	 		RCX = Number of sectors to read
-	 		RDX = Disk #
-			RDI = Destination memory address
+	 	RCX = Number of sectors to read
+	 	RDX = Disk #
+		RDI = Destination memory address
 	OUT:	RCX = Number of sectors read
-			All other registers preserved
+		All other registers preserved
 
 Assembly Example:
 
-	mov rax, 0		; Read sector 0
-	mov rcx, 1		; Read one sector
-	mov rdx, 0		; Read from Disk 0
-	mov rdi, diskbuffer	; Read disk to this memory address
-	call b_disk_read
+	mov rax, 0			; Read sector 0
+	mov rcx, 1			; Read one sector
+	mov rdx, 0			; Read from Disk 0
+	mov rdi, diskbuffer		; Read disk to this memory address
+	call [b_disk_read]
 
 
 ### b\_disk\_write
@@ -297,35 +163,36 @@ Write a number of sectors from memory to disk
 Assembly Registers:
 
 	 IN:	RAX = Starting sector #
-	 		RCX = Number of sectors to write
-	 		RDX = Disk #
-			RSI = Source memory address
+	 	RCX = Number of sectors to write
+	 	RDX = Disk #
+		RSI = Source memory address
 	OUT:	RCX = Number of sectors written
-			All other registers preserved
+		All other registers preserved
 
 Assembly Example:
 
-	mov rax, 0		; Write to sector 0
-	mov rcx, 1		; Write one sector
-	mov rdx, 0		; Write to Disk 0
-	mov rsi, diskbuffer	; Write the contents from this memory address to disk
-	call b_disk_write
+	mov rax, 0			; Write to sector 0
+	mov rcx, 1			; Write one sector
+	mov rdx, 0			; Write to Disk 0
+	mov rsi, diskbuffer		; Write the contents from this memory address to disk
+	call [b_disk_write]
 
 
 ## Misc
 
 
-### b\_system\_config
+### b\_config
 
-View or modify system configuration options
+View or modify configuration options
 
 Assembly Registers:
 
-	 IN:	RDX = Function #
-			RAX = Variable 1
-	OUT:	RAX = Result 1
+	 IN:	RCX = Function
+		RAX = Variable 1
+		RDX = Variable 2
+	OUT:	RAX = Result
 
-Function numbers come in pairs (one for reading a parameter, and one for writing a parameter). `b_system_config` should be called with a function alias and not a direct function number.
+Function numbers come in pairs (one for reading a parameter, and one for writing a parameter). `b_config` should be called with a function alias and not a direct function number.
 
 Currently the following functions are supported:
 
@@ -354,21 +221,33 @@ Currently the following functions are supported:
 
    get the current mac address (or 0 if ethernet is down)
 
+ - 50: disk info
+
+   Queries a disk and returns a 512-byte block of data from the device.
+   
+   Useful segments:
+   	- 20-39    Serial number (20 ASCII characters)
+	- 46-52    Firmware revision (8 ASCII characters)
+	- 54-93    Model number (40 ASCII characters)
+	- 200-207    Total Number of User Addressable Sectors
+	- 234-235    Words per Logical Sector
+
 every function that gets something sets RAX with the result
 
 every function that sets something gets the value from RAX
 
-### b\_system\_misc
 
-Call miscellaneous OS sub-functions
+### b\_system
+
+Call miscellaneous system sub-functions
 
 Assembly Registers:
 
-	 IN:	RDX = Function #
-			RAX = Variable 1
-			RCX = Variable 2
+	 IN:	RCX = Function
+		RAX = Variable 1
+		RDX = Variable 2
 	OUT:	RAX = Result 1
-			RCX = Result 2
+		RDX = Result 2
 
 Currently the following functions are supported:
 
@@ -384,7 +263,7 @@ Currently the following functions are supported:
 4. debug_dump_mem
 	- os_debug_dump_mem
 	- in rax: The start of the memory to dump
-	- in rcx: Number of bytes to dump
+	- in rdx: Number of bytes to dump
 5. debug_dump_rax
 	- Dump rax in Hex
 	- in rax: The Content that gets printed to memory
@@ -397,10 +276,10 @@ Currently the following functions are supported:
 	- out rax: The mac address
 8. mem_get_free
 	- Returns the number of 2 MiB pages that are available
-	- out rcx: Number of pages
+	- out rax: Number of pages
 9. smp_numcores
 	- Returns the number of cores in this computer
-	- out rcx: The number of cores
+	- out rax: The number of cores
 10. smp_queuelen
 	- Returns the number of items in the processing queue
 	- out rax: Number of items in processing queue
